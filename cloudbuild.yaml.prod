@@ -1,0 +1,25 @@
+steps:
+  # Backup
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['pubsub', 'topics', 'publish', 'nxt.firestore.backup', '--message', 'prod backup']
+
+  # Install dependencies - root project
+  - name: 'node:16.10'
+    entrypoint: npm
+    args: ['install', '--unsafe-perm']
+
+  # Build project
+  - name: 'node:16.10'
+    entrypoint: npm
+    args: ['run', 'prod']
+
+  # Deploy Firebase project Hosting
+  - name: 'eu.gcr.io/nextwork/firebase-cli'
+    args: ['deploy', '--except', 'functions', '--project', 'nextwork', '--force']
+    secretEnv: ['FIREBASE_TOKEN']
+
+secrets:
+  - kmsKeyName: projects/nextwork/locations/global/keyRings/firebase_keyring/cryptoKeys/firebase_key
+    secretEnv:
+      FIREBASE_TOKEN: CiQAxC5z+33ubLiXJNAo7W7brzmnI0NqH2OG5WuFPsakeuRjvwwSVgBQpwgHgjbYBJc0qRxC81wdj2gp66Imr9wdE1e1tovUKUUHTEwVNagQ7OMg4/MppgCmywq1QYa/p5eAHG/O2GBI/mlblVpKEOatHyJVeSzpTawHZ01y
+timeout: 7200s
