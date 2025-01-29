@@ -1,4 +1,23 @@
 steps:
+  # Step 5: Send deployment notification email
+  - name: 'ubuntu:latest'
+    args:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo "_GITHUB_TOKEN=${_GITHUB_TOKEN}" >> /workspace/.env
+        echo "_SMTP_PASSWORD=${_SMTP_PASSWORD}" >> /workspace/.env
+        echo "_REPO_OWNER=${_REPO_OWNER}" >> /workspace/.env
+        echo "_REPO_NAME=${_REPO_NAME}" >> /workspace/.env
+
+  - name: 'python:3.10'
+    args:
+      - '/bin/bash'
+      - '-c'
+      - |
+        pip install --upgrade pip
+        pip install python-dotenv requests
+        python /workspace/build_start_notification.py
   # Backup
   - name: 'gcr.io/cloud-builders/gcloud'
     args: ['pubsub', 'topics', 'publish', 'nxt.firestore.backup', '--message', 'prod backup']
@@ -17,6 +36,16 @@ steps:
   - name: 'eu.gcr.io/nextwork/firebase-cli'
     args: ['deploy', '--except', 'functions', '--project', 'nextwork', '--force']
     secretEnv: ['FIREBASE_TOKEN']
+
+  # Send deployment end notification
+  - name: 'python:3.10'
+    args:
+      - '/bin/bash'
+      - '-c'
+      - |
+        pip install --upgrade pip
+        pip install python-dotenv requests
+        python /workspace/build_end_notification.py
 
 secrets:
   - kmsKeyName: projects/nextwork/locations/global/keyRings/firebase_keyring/cryptoKeys/firebase_key
