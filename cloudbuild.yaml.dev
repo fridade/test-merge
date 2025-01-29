@@ -1,0 +1,67 @@
+steps:
+
+  # nofification on build start
+  - name: 'northamerica-northeast1-docker.pkg.dev/nextwork-staging/msmtp-notification/teams-mail-notifier:staging'
+    args:
+      - '/bin/sh'
+      - '-c'
+      - |
+        MESSAGE_TITLE="vulcan staging build started" MESSAGE_CONTENT="the  Build has started" python3 /app/main.py
+    secretEnv: ['WEBHOOK_URL']
+    env: 
+     - 'NOTIFICATION_TYPE=${_NOTIFICATION_TYPE}'
+  # Install dependencies - root project
+  - name: 'node:18.19.0'
+    entrypoint: bash
+    args:
+    - '-c'
+    - |
+      npm install --unsafe-perm=true && echo "### Installation step   Package installation passed" >> /workspace/summarry.txt || echo "### Installation step  Package installation failed" >> /workspace/summarry.txt
+
+  # Build project
+  - name: 'node:18.19.0'
+    entrypoint: npm
+    args: ['run', 'staging']
+
+  - name: 'mcr.microsoft.com/playwright:v1.37.1-jammy'
+    entrypoint: bash
+    args:
+    - '-c'
+    - |
+      npm run test:staging-automation && echo "### Unit test step Unit test successful click on this link https://storage.googleapis.com/${_BUCKET}/%20cucumber-report.html  to see details on the test. " >> /workspace/summarry.txt  || echo '### Unit test step Unit test failed click on this link https://storage.googleapis.com/${_BUCKET}/%20cucumber-report.html  to see details on the test. ' >> /workspace/summarry.txt 
+# upload test results to Bucket
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'upload-artifacts'
+    args: [ 'gsutil', 'cp', '*report.html', 'gs://${_BUCKET}' ]
+
+  # Deploy Firebase project Hosting
+  - name: 'eu.gcr.io/nextwork-staging/firebase-cli'
+    args: ['deploy', '--except', 'functions', '--project', 'nextwork-staging', '--force']
+    secretEnv: ['FIREBASE_TOKEN']
+# nofification on build done and summary of build
+  - name: 'northamerica-northeast1-docker.pkg.dev/nextwork-staging/msmtp-notification/teams-mail-notifier:staging'
+    args:
+      - '/bin/sh'
+      - '-c'
+      - |
+        MESSAGE_TITLE="vulcan staging build finished here is the SUMMARY" MESSAGE_CONTENT=$(cat /workspace/summarry.txt) python3 /app/main.py
+    secretEnv: ['WEBHOOK_URL']
+    env: 
+     - 'NOTIFICATION_TYPE=${_NOTIFICATION_TYPE}'
+# The notification is Just teams for now as thats where the messages a published to but in the later upgrade we will add email TYPE
+secrets:
+  - kmsKeyName: projects/nextwork-staging/locations/global/keyRings/firebase_keyring/cryptoKeys/firebase_key
+    secretEnv:
+      FIREBASE_TOKEN: CiQAozYHxgAFJuw4qHjA/sEr0Ut3VU4dnkMmVy0CdsIP9lgExksSVgCLCGsEp4T+J4e3woSUW8yp9LthlBILX/5hApXOdwA9gpVuRv+1RMbdpJ+hatBd52mAoMb7XKK6Ywo+j3K7WVeL+C2z90azvwHrHnMpq2usGupoc5h7
+
+substitutions:
+    _BUCKET: volcan-test-bucket
+    _NOTIFICATION_TYPE: Teams 
+     
+# calling the secret value which is the password of our email. 
+availableSecrets:
+ secretManager:
+    - versionName: projects/22211245086/secrets/vulcan-test-notif-email-pass/versions/latest
+      env: WEBHOOK_URL
+
+timeout: 7200s
